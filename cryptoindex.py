@@ -34,7 +34,8 @@ def format_output(mymean, mystandarddeviation, mysharpe):
     """
     return output
 
-api_key="BBRlVSAOiNqeJ77yjnveFBqZZTOFv2gN"
+import os
+api_key = os.getenv("POLYGON_KEY")
 
 import pandas as pd
 from polygon import RESTClient
