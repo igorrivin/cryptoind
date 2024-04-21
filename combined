@@ -1,0 +1,127 @@
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+import threading
+import gradio as gr
+import plotly.express as px
+
+
+def calc_dates(date: datetime = datetime.now()) -> tuple:
+   this_year = date - timedelta(days=date.day-1)
+   one_year = this_year + timedelta(days=-365)
+   return (one_year.strftime("%Y-%m-%d"), this_year.strftime("%Y-%m-%d"))
+
+
+def fetch_crypto_data(start_date, end_date, *, locale='global', market_type='crypto', from_csv=True, csv_file='crypto_data.csv'):
+   if from_csv:
+       try:
+           print(f"Fetching data from CSV file '{csv_file}' for the period {start_date} to {end_date}.")
+           data = pd.read_csv(csv_file)
+           print(f"CSV file '{csv_file}' loaded successfully.")
+           data = data[(data['date'] >= start_date) & (data['date'] <= end_date)]
+           print(f"Data filtered for the period {start_date} to {end_date}.")
+           return data
+       except FileNotFoundError:
+           print(f"CSV file '{csv_file}' not found.")
+           return pd.DataFrame()
+       except Exception as e:
+           print(f"Error in fetch_crypto_data function: {e}")
+           return pd.DataFrame()
+   else:
+       try:
+           pass
+       except Exception as e:
+           print(f"Error in fetch_crypto_data function: {e}")
+           return pd.DataFrame()
+
+
+def get_crypto_index(crypto_data, howmany=20):
+   try:
+       valdict = {}
+       dfdict = {}
+       vallist = [] 
+      
+       stable_coins = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'GUSD', 'USDP', 'HUSD', 'PAX', 'UST']
+       crypto_data = crypto_data[~crypto_data['ticker'].isin(stable_coins)]
+      
+       crypto_data = crypto_data.sort_values('volume', ascending=False).head(howmany)
+      
+       index_value = np.sqrt(crypto_data['marketcap']).sum()
+      
+       return index_value
+
+
+   except Exception as e:
+       print(f"Error in get_crypto_index function: {e}")
+       return None
+
+
+def plot_index_prices(start_date, end_date, *, data_source='csv', **kwargs):
+   try:
+       print(f"Fetching cryptocurrency data for the period {start_date} to {end_date}.")
+       if data_source == 'csv':
+           cryptodf = fetch_crypto_data(start_date=start_date, end_date=end_date, **kwargs)
+       else:
+           cryptodf = pd.DataFrame()
+      
+       if cryptodf.empty:
+           print("No data available for plotting.")
+           return None
+       print("Calculating crypto index.")
+
+
+       # Group the data by date and calculate the index for each day
+       cryptodf['date'] = pd.to_datetime(cryptodf['date'])
+       index_values = cryptodf.groupby('date').apply(get_crypto_index)
+
+
+       if index_values is None:
+           print("No index value calculated.")
+           return None
+
+
+       # Create Plotly line plot
+       fig = px.line(index_values, title='Cryptocurrency Index Value')
+       fig.update_xaxes(title='Date')
+       fig.update_yaxes(title='Index Value')
+      
+       return fig
+   except Exception as e:
+       print(f"Error in plot_index_prices function: {e}")
+       return None
+
+
+def make_graph(start_date=None, end_date=None, data_source='csv'):
+   try:
+       print(f"Generating graph with start date: {start_date}, end date: {end_date}.")
+       fig = plot_index_prices(start_date, end_date, data_source=data_source)
+       return gr.Plot(fig)
+   except Exception as e:
+       print(f"Error in make_graph function: {e}")
+       return None
+
+
+if __name__ == "__main__":
+   make_graph_flex = make_graph
+   with gr.Blocks() as iface:
+       startdatebox = gr.Textbox(label="Start Date")
+       enddatebox = gr.Textbox(label="End Date")
+       datasourcebox = gr.Dropdown(choices=['csv', 'api', 'database'], label="Data Source")
+       update_button = gr.Button("Update Graph")
+
+
+       theplot = gr.Plot()
+       radio = gr.Radio(choices=["Historical", "Real-time"], label="graph type")
+
+
+       radio.change(fn=make_graph_flex, inputs=[startdatebox, enddatebox, datasourcebox], outputs=[theplot])
+       update_button.click(fn=make_graph_flex, inputs=[startdatebox, enddatebox, datasourcebox], outputs=[theplot])
+
+
+       iface.launch()
+
+
+
+
+
+
